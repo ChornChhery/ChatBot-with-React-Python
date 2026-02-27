@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import axios from 'axios'
 import './Chat.css'
 
@@ -10,23 +10,27 @@ export default function Chat() {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
-  const [docFilter] = useState(() => localStorage.getItem(FILTER_KEY) || '')
   const [docFilterName, setDocFilterName] = useState('')
   const wsRef = useRef(null)
   const bottomRef = useRef(null)
   const textareaRef = useRef(null)
 
+  // FIX: Read docFilter fresh from localStorage each time sendMessage is called
+  // instead of capturing it once at mount — so filter changes on Rag page take effect
+  // without needing a full page reload
+  const getDocFilter = () => localStorage.getItem(FILTER_KEY) || ''
+
   useEffect(() => {
-    // Get document name for display
-    if (docFilter) {
+    const filter = getDocFilter()
+    if (filter) {
       axios.get(`${API}/api/documents`)
         .then(r => {
-          const doc = r.data.find(d => d.id === docFilter)
+          const doc = r.data.find(d => d.id === filter)
           setDocFilterName(doc?.file_name || '')
         })
         .catch(() => {})
     }
-  }, [docFilter])
+  }, [])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -39,9 +43,20 @@ export default function Chat() {
     el.style.height = Math.min(el.scrollHeight, 160) + 'px'
   }, [input])
 
-  const sendMessage = () => {
+  // FIX: Close WebSocket on component unmount to prevent dangling connections
+  useEffect(() => {
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close()
+      }
+    }
+  }, [])
+
+  const sendMessage = useCallback(() => {
     const question = input.trim()
     if (!question || isStreaming) return
+
+    const docFilter = getDocFilter()
 
     const userMsg = { role: 'user', content: question, id: Date.now() }
     const assistantMsg = { role: 'assistant', content: '', id: Date.now() + 1, streaming: true }
@@ -50,7 +65,12 @@ export default function Chat() {
     setInput('')
     setIsStreaming(true)
 
-    const history = messages.map(m => ({ role: m.role, content: m.content }))
+    // FIX: Filter out empty-content messages from interrupted streams before
+    // sending history to backend — empty assistant messages confuse the LLM
+    const history = messages
+      .filter(m => m.content && m.content.trim())
+      .map(m => ({ role: m.role, content: m.content }))
+
     const ws = new WebSocket(`${WS}/api/chat/ws`)
     wsRef.current = ws
 
@@ -58,7 +78,7 @@ export default function Chat() {
       ws.send(JSON.stringify({
         question,
         history,
-        document_id: docFilter || undefined   // pass saved filter to backend
+        document_id: docFilter || undefined
       }))
     }
 
@@ -73,7 +93,15 @@ export default function Chat() {
       } else {
         setMessages(prev => prev.map(m =>
           m.id === assistantMsg.id
-            ? { ...m, streaming: false, sources: data.sources || [] }
+            ? {
+                ...m,
+                streaming: false,
+                sources: data.sources || [],
+                // FIX: Only show sources when backend confirms RAG was actually used
+                // (score above threshold). If ragUsed is false, LLM answered from
+                // its own knowledge and there are no meaningful sources to show.
+                ragUsed: data.ragUsed || false
+              }
             : m
         ))
         setIsStreaming(false)
@@ -89,7 +117,7 @@ export default function Chat() {
       ))
       setIsStreaming(false)
     }
-  }
+  }, [input, isStreaming, messages])
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -99,6 +127,8 @@ export default function Chat() {
   }
 
   const clearChat = () => setMessages([])
+
+  const docFilter = getDocFilter()
 
   return (
     <div className="chat-page">
@@ -154,7 +184,10 @@ export default function Chat() {
                     {msg.content || (msg.streaming && <span className="typing-cursor">▋</span>)}
                     {msg.streaming && msg.content && <span className="typing-cursor">▋</span>}
                   </div>
-                  {msg.role === 'assistant' && !msg.streaming && msg.sources?.length > 0 && (
+
+                  {/* FIX: Only show sources when ragUsed=true (backend found relevant chunks
+                      above the score threshold). Never show when LLM answered on its own. */}
+                  {msg.role === 'assistant' && !msg.streaming && msg.ragUsed && msg.sources?.length > 0 && (
                     <div className="bubble-sources">
                       <div className="sources-label">
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

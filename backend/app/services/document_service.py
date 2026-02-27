@@ -2,6 +2,7 @@ import json
 import uuid
 from typing import List
 from sqlalchemy.orm import Session
+from app.database import SessionLocal
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
 from app.core.enums import DocumentStatus, ChunkingStrategy
@@ -24,12 +25,18 @@ STRATEGY_NAME_MAP = {
     ChunkingStrategy.SEMANTIC: "Semantic",
 }
 
+
 class DocumentService:
-    async def process_document(self, db: Session, document_id: str, text: str, strategy: ChunkingStrategy):
-        doc = db.query(Document).filter(Document.id == document_id).first()
-        if not doc:
-            return
+    # FIX: No longer accepts db as parameter — creates its own fresh session.
+    # This prevents DetachedInstanceError when the request-scoped session closes
+    # before the background task finishes.
+    async def process_document(self, document_id: str, text: str, strategy: ChunkingStrategy):
+        db: Session = SessionLocal()
         try:
+            doc = db.query(Document).filter(Document.id == document_id).first()
+            if not doc:
+                return
+
             doc.status = DocumentStatus.PROCESSING
             db.commit()
 
@@ -61,9 +68,14 @@ class DocumentService:
             embedding_cache.add_chunks(new_cache_chunks)
 
         except Exception as e:
-            doc.status = DocumentStatus.FAILED
-            db.commit()
+            db.rollback()
+            doc = db.query(Document).filter(Document.id == document_id).first()
+            if doc:
+                doc.status = DocumentStatus.FAILED
+                db.commit()
             print(f"[DocumentService] Error processing {document_id}: {e}")
+        finally:
+            db.close()
 
     def delete_document(self, db: Session, document_id: str):
         doc = db.query(Document).filter(Document.id == document_id).first()

@@ -54,15 +54,44 @@ export default function Rag() {
       .catch(() => {})
   }
 
+  const startPolling = () => {
+    if (pollRef.current) return
+    pollRef.current = setInterval(() => { fetchDocs(); fetchCache() }, 3000)
+  }
+
+  const stopPolling = () => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current)
+      pollRef.current = null
+    }
+  }
+
   useEffect(() => {
     fetchDocs()
     fetchCache()
-    pollRef.current = setInterval(() => { fetchDocs(); fetchCache() }, 3000)
-    // Load saved filter
+    startPolling()
+
     const saved = localStorage.getItem(FILTER_KEY) || ''
     setSelectedDoc(saved)
     setSavedDoc(saved)
-    return () => clearInterval(pollRef.current)
+
+    // FIX: Pause polling when tab is hidden, resume when visible again.
+    // Prevents unnecessary API calls while user is on another tab.
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopPolling()
+      } else {
+        fetchDocs()
+        fetchCache()
+        startPolling()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      stopPolling()
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
   }, [])
 
   const handleFileSelect = (file) => {
@@ -107,8 +136,7 @@ export default function Rag() {
   }
 
   const deleteDoc = async (id) => {
-    if (!confirm('Delete this document and all its chunks?')) return
-    // If deleted doc was the saved filter, reset it
+    if (!window.confirm('Delete this document and all its chunks?')) return
     if (savedDoc === id) {
       localStorage.setItem(FILTER_KEY, '')
       setSavedDoc('')
@@ -297,7 +325,6 @@ export default function Rag() {
             </button>
           </div>
 
-          {/* Status line */}
           <div className="doc-filter-status">
             <span className="filter-status-dot" />
             {savedDoc && savedDocName
