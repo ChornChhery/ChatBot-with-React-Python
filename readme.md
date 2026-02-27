@@ -23,7 +23,7 @@ Upload documents and chat with them in real time using local Ollama models.
 
 ## ⚡ Already Cloned? Start Here
 
-If you just cloned this repo, follow these steps to get it running:
+> If you just cloned this repo, follow **only these steps**. Do NOT follow the "Build From Scratch" section below — those files already exist in the repo.
 
 ### 1. Install prerequisites (one time only)
 
@@ -51,7 +51,9 @@ pip install -r requirements.txt
 
 ### 4. Create the .env file
 
-Create a file at `backend/.env` with this content:
+> ⚠️ This file is NOT in the repo for security reasons. You must create it manually.
+
+Create a new file at `backend/.env` and paste this content:
 
 ```dotenv
 DATABASE_URL=mssql+pyodbc://@(localdb)\MSSQLLocalDB/ChatBotRagPy?driver=ODBC+Driver+17+for+SQL+Server&Trusted_Connection=yes
@@ -61,8 +63,7 @@ VECTOR_WEIGHT=0.7
 MIN_SIMILARITY_THRESHOLD=0.60
 ```
 
-> ⚠️ The `.env` file is not included in the repo (for security). You must create it manually.
-> Always use a **single backslash** `\` — never `\\`.
+> ⚠️ Always use a **single backslash** `\` — never `\\`.
 
 ### 5. Create the database
 
@@ -76,6 +77,12 @@ sqlcmd -S "(localdb)\MSSQLLocalDB" -E -Q "CREATE DATABASE ChatBotRagPy;"
 alembic upgrade head
 ```
 
+You should see:
+```
+Running upgrade  -> xxxxxxxx, InitialCreate
+```
+No error = ✅ success
+
 ### 7. Set up the frontend
 
 ```bash
@@ -87,29 +94,33 @@ npm install
 
 Open **3 separate terminals**:
 
-**Terminal 1:**
+**Terminal 1 — Ollama:**
 ```bash
 ollama serve
 ```
 
-**Terminal 2:**
+**Terminal 2 — Backend:**
 ```bash
 cd backend
 venv\Scripts\activate
 uvicorn app.main:app --reload
 ```
 
-**Terminal 3:**
+**Terminal 3 — Frontend:**
 ```bash
 cd frontend
 npm run dev
 ```
 
-Open browser: **http://localhost:5173**
+Open browser: **http://localhost:5173** ✅
 
 ---
 
-## Prerequisites
+## 🏗️ Build From Scratch
+
+> Only follow this section if you are setting up this project **for the first time** on a new machine without cloning.
+
+### Prerequisites
 
 - [Python 3.12+](https://www.python.org/downloads/)
 - [Node.js 24+](https://nodejs.org/)
@@ -119,7 +130,7 @@ Open browser: **http://localhost:5173**
 
 ---
 
-## Step 1 — Pull Ollama Models
+### Step 1 — Pull Ollama Models
 
 ```bash
 ollama pull llama3.2:3b
@@ -130,7 +141,7 @@ Wait for both to finish before continuing.
 
 ---
 
-## Step 2 — Create Project Folders
+### Step 2 — Create Project Folders
 
 ```bash
 cd D:\Jame
@@ -141,9 +152,9 @@ mkdir backend frontend
 
 ---
 
-## Step 3 — Backend Setup
+### Step 3 — Backend Setup
 
-### 3.1 Create Virtual Environment
+#### 3.1 Create Virtual Environment
 
 ```bash
 cd D:\Jame\ChatbotRagPy\backend
@@ -153,19 +164,14 @@ venv\Scripts\activate
 
 You should see `(venv)` at the start of your terminal line.
 
-### 3.2 Install Python Dependencies
+#### 3.2 Install Python Dependencies
 
 ```bash
 pip install fastapi "uvicorn[standard]" sqlalchemy alembic pyodbc python-multipart aiofiles ollama httpx numpy rank-bm25 pypdf2 markdownify python-dotenv "pydantic-settings"
-```
-
-Then save them to `requirements.txt` so others can restore them:
-
-```bash
 pip freeze > requirements.txt
 ```
 
-### 3.3 Create All Folders
+#### 3.3 Create All Folders
 
 ```bash
 mkdir app
@@ -178,7 +184,7 @@ mkdir app\chunking
 mkdir app\evaluators
 ```
 
-### 3.4 Create All Empty __init__.py Files
+#### 3.4 Create All Empty __init__.py Files
 
 ```bash
 type nul > app\__init__.py
@@ -191,7 +197,7 @@ type nul > app\chunking\__init__.py
 type nul > app\evaluators\__init__.py
 ```
 
-### 3.5 Create .env File
+#### 3.5 Create .env File
 
 Create `backend/.env` with this content:
 
@@ -205,7 +211,7 @@ MIN_SIMILARITY_THRESHOLD=0.60
 
 > ⚠️ Use a **single backslash** `\` — never `\\` in the .env file.
 
-### 3.6 Create app/core/config.py
+#### 3.6 Create app/core/config.py
 
 ```python
 from pydantic_settings import BaseSettings
@@ -224,7 +230,7 @@ class Settings(BaseSettings):
 settings = Settings()
 ```
 
-### 3.7 Create app/core/enums.py
+#### 3.7 Create app/core/enums.py
 
 ```python
 from enum import IntEnum
@@ -243,7 +249,7 @@ class DocumentStatus:
 
 > ⚠️ Do NOT write `from enum import IntEnum, str as StrEnum` — that causes an ImportError in Python 3.12.
 
-### 3.8 Create app/database.py
+#### 3.8 Create app/database.py
 
 ```python
 from sqlalchemy import create_engine
@@ -262,7 +268,7 @@ def get_db():
         db.close()
 ```
 
-### 3.9 Create app/models/document.py
+#### 3.9 Create app/models/document.py
 
 ```python
 import uuid
@@ -282,7 +288,7 @@ class Document(Base):
     chunks = relationship("DocumentChunk", back_populates="document", cascade="all, delete-orphan")
 ```
 
-### 3.10 Create app/models/document_chunk.py
+#### 3.10 Create app/models/document_chunk.py
 
 ```python
 import uuid
@@ -303,7 +309,7 @@ class DocumentChunk(Base):
     document = relationship("Document", back_populates="chunks")
 ```
 
-### 3.11 Create app/schemas/document.py
+#### 3.11 Create app/schemas/document.py
 
 ```python
 from pydantic import BaseModel
@@ -332,7 +338,7 @@ class CacheStats(BaseModel):
     estimatedMemoryMb: float
 ```
 
-### 3.12 Create app/schemas/chat.py
+#### 3.12 Create app/schemas/chat.py
 
 ```python
 from pydantic import BaseModel
@@ -354,7 +360,7 @@ class DocumentChunkResult(BaseModel):
     score: float
 ```
 
-### 3.13 Create app/schemas/evaluation.py
+#### 3.13 Create app/schemas/evaluation.py
 
 ```python
 from pydantic import BaseModel
@@ -378,7 +384,7 @@ class EvaluationResult(BaseModel):
     overall_score: float
 ```
 
-### 3.14 Create app/chunking/base.py
+#### 3.14 Create app/chunking/base.py
 
 ```python
 from abc import ABC, abstractmethod
@@ -390,7 +396,7 @@ class BaseChunkingStrategy(ABC):
         pass
 ```
 
-### 3.15 Create app/chunking/fixed_size.py
+#### 3.15 Create app/chunking/fixed_size.py
 
 ```python
 from typing import List
@@ -411,7 +417,7 @@ class FixedSizeChunkingStrategy(BaseChunkingStrategy):
         return [c for c in chunks if c]
 ```
 
-### 3.16 Create app/chunking/content_aware.py
+#### 3.16 Create app/chunking/content_aware.py
 
 ```python
 from typing import List
@@ -441,7 +447,7 @@ class ContentAwareChunkingStrategy(BaseChunkingStrategy):
         return chunks
 ```
 
-### 3.17 Create app/chunking/semantic.py
+#### 3.17 Create app/chunking/semantic.py
 
 ```python
 from typing import List
@@ -481,7 +487,7 @@ class SemanticChunkingStrategy(BaseChunkingStrategy):
         return chunks
 ```
 
-### 3.18 Create app/evaluators/bleu.py
+#### 3.18 Create app/evaluators/bleu.py
 
 ```python
 from collections import Counter
@@ -507,7 +513,7 @@ class BLEUEvaluator:
         return round(bp * math.exp(log_avg), 4)
 ```
 
-### 3.19 Create app/evaluators/gleu.py
+#### 3.19 Create app/evaluators/gleu.py
 
 ```python
 from collections import Counter
@@ -532,7 +538,7 @@ class GLEUEvaluator:
         return round((precision + recall) / 2, 4)
 ```
 
-### 3.20 Create app/evaluators/f1.py
+#### 3.20 Create app/evaluators/f1.py
 
 ```python
 class F1Evaluator:
@@ -549,7 +555,7 @@ class F1Evaluator:
         return round(2 * precision * recall / (precision + recall), 4)
 ```
 
-### 3.21 Create app/services/embedding_cache.py
+#### 3.21 Create app/services/embedding_cache.py
 
 ```python
 import json
@@ -608,7 +614,7 @@ class EmbeddingCacheService:
 embedding_cache = EmbeddingCacheService()
 ```
 
-### 3.22 Create app/services/embedding_service.py
+#### 3.22 Create app/services/embedding_service.py
 
 ```python
 import json
@@ -636,7 +642,7 @@ class EmbeddingService:
 embedding_service = EmbeddingService()
 ```
 
-### 3.23 Create app/services/bm25_service.py
+#### 3.23 Create app/services/bm25_service.py
 
 ```python
 import re
@@ -687,7 +693,7 @@ class BM25Service:
 bm25_service = BM25Service()
 ```
 
-### 3.24 Create app/services/hybrid_search.py
+#### 3.24 Create app/services/hybrid_search.py
 
 ```python
 import numpy as np
@@ -725,7 +731,7 @@ class HybridSearchService:
 hybrid_search_service = HybridSearchService()
 ```
 
-### 3.25 Create app/services/document_service.py
+#### 3.25 Create app/services/document_service.py
 
 ```python
 import json
@@ -799,7 +805,7 @@ class DocumentService:
             embedding_cache.remove_document(document_id)
 ```
 
-### 3.26 Create app/services/rag_service.py
+#### 3.26 Create app/services/rag_service.py
 
 ```python
 from typing import List, AsyncGenerator
@@ -848,7 +854,7 @@ class RagService:
         ]
 ```
 
-### 3.27 Create app/services/evaluation_service.py
+#### 3.27 Create app/services/evaluation_service.py
 
 ```python
 import httpx
@@ -908,7 +914,7 @@ class EvaluationService:
         }
 ```
 
-### 3.28 Create app/routers/documents.py
+#### 3.28 Create app/routers/documents.py
 
 ```python
 import uuid
@@ -978,7 +984,7 @@ def delete_document(document_id: str, db: Session = Depends(get_db)):
     document_service.delete_document(db, document_id)
 ```
 
-### 3.29 Create app/routers/chat.py
+#### 3.29 Create app/routers/chat.py
 
 ```python
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -1007,7 +1013,7 @@ async def chat_ws(websocket: WebSocket):
         pass
 ```
 
-### 3.30 Create app/routers/evaluation.py
+#### 3.30 Create app/routers/evaluation.py
 
 ```python
 from fastapi import APIRouter
@@ -1026,7 +1032,7 @@ async def run_evaluation(request: EvaluationRequest):
     )
 ```
 
-### 3.31 Create app/main.py
+#### 3.31 Create app/main.py
 
 ```python
 from fastapi import FastAPI
@@ -1067,7 +1073,7 @@ def root():
     return {"message": "ChatBot RAG API is running"}
 ```
 
-### 3.32 Initialize Alembic
+#### 3.32 Initialize Alembic
 
 ```bash
 alembic init alembic
@@ -1088,13 +1094,13 @@ from app.models import document, document_chunk
 target_metadata = Base.metadata
 ```
 
-### 3.33 Create the Database
+#### 3.33 Create the Database
 
 ```bash
 sqlcmd -S "(localdb)\MSSQLLocalDB" -E -Q "CREATE DATABASE ChatBotRagPy;"
 ```
 
-### 3.34 Run Migrations
+#### 3.34 Run Migrations
 
 ```bash
 alembic revision --autogenerate -m "InitialCreate"
@@ -1109,9 +1115,9 @@ No error = ✅ success
 
 ---
 
-## Step 4 — Frontend Setup
+### Step 4 — Frontend Setup
 
-### 4.1 Create React App
+#### 4.1 Create React App
 
 ```bash
 cd D:\Jame\ChatbotRagPy\frontend
@@ -1121,21 +1127,21 @@ npm create vite@latest . -- --template react
 When asked **"Use Vite 8 beta?"** → select **No**
 When asked **"Install with npm and start now?"** → select **Yes**
 
-### 4.2 Install Dependencies
+#### 4.2 Install Dependencies
 
 ```bash
 npm install
 npm install axios react-router-dom
 ```
 
-### 4.3 Create Folders
+#### 4.3 Create Folders
 
 ```bash
 mkdir src\pages
 mkdir src\components
 ```
 
-### 4.4 Create Frontend Files
+#### 4.4 Create Frontend Files
 
 Create these files in `frontend/src/`:
 
@@ -1154,11 +1160,9 @@ Create these files in `frontend/src/`:
 | `pages/Evaluation.jsx` | Evaluation page |
 | `pages/Evaluation.css` | Evaluation styles |
 
-> See `PROJECT_CONTEXT.md` for the full content of each file.
-
 ---
 
-## Step 5 — Open in VS Code
+### Step 5 — Open in VS Code
 
 ```bash
 cd D:\Jame\ChatbotRagPy
