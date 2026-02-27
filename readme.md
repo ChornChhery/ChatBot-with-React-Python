@@ -2,8 +2,7 @@
 
 A Retrieval-Augmented Generation (RAG) Chatbot built with **FastAPI + React**.
 Upload documents and chat with them in real time using local Ollama models.
-
-> Same features as ChatBotRAG (.NET version) — rebuilt in Python + React.
+Supports **English**, **Thai**, and **Khmer** documents.
 
 ---
 
@@ -21,11 +20,53 @@ Upload documents and chat with them in real time using local Ollama models.
 
 ---
 
+## How RAG Works in This Project
+
+When a user sends a message, the system decides automatically whether to use RAG or answer with the LLM alone:
+
+1. The question is embedded into a vector using `mxbai-embed-large`
+2. A **hybrid search** runs — combining **vector similarity** (cosine) and **BM25 keyword search** — across all cached document chunks
+3. Each chunk gets a **hybrid score** (70% vector + 30% BM25 by default)
+4. If the best chunks score **≥ 0.65**, the answer uses **LLM + RAG context** and sources are shown in the chat
+5. If no chunks pass the threshold, the LLM answers from its **own knowledge only** — no sources shown
+
+This means the chatbot never forces irrelevant document context into answers.
+
+---
+
+## Chunking Strategies
+
+When uploading a document, you choose one of three strategies:
+
+| Strategy | Best For | How It Works |
+|---|---|---|
+| Fixed Size | Most documents, quick setup | Splits every 500 chars with 100-char overlap |
+| Content Aware | Markdown, structured docs | Respects headings, paragraphs, and sentence terminators |
+| Semantic | Research papers, dense content | Groups sentences by topic overlap similarity |
+
+---
+
+## Language Support
+
+| Language | BM25 Tokenization | Chunking |
+|---|---|---|
+| English | ✅ Word tokenization + stopword removal | ✅ Punctuation-based sentence splitting |
+| Thai | ✅ `pythainlp` word tokenizer (trigram fallback) | ✅ `pythainlp` sentence tokenizer (newline fallback) |
+| Khmer | ✅ Character trigrams | ✅ Splits on `។` `៕` `៖` terminators |
+
+> **For best Thai quality**, install `pythainlp` in your venv:
+> ```bash
+> pip install pythainlp
+> ```
+> Without it, Thai falls back to trigram-based tokenization which still works but is less accurate.
+
+---
+
 ## ⚡ Already Cloned? Start Here
 
-> If you just cloned this repo, follow **only these steps**. Do NOT follow the "Build From Scratch" section below — those files already exist in the repo.
+> Follow **only these steps** if you just cloned the repo.
 
-### 1. Install prerequisites (one time only)
+### 1. Install Prerequisites (one time only)
 
 - [Python 3.12+](https://www.python.org/downloads/)
 - [Node.js 24+](https://nodejs.org/)
@@ -33,14 +74,14 @@ Upload documents and chat with them in real time using local Ollama models.
 - [SQL Server LocalDB](https://aka.ms/sqllocaldb)
 - [ODBC Driver 17 for SQL Server](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server)
 
-### 2. Pull Ollama models (one time only)
+### 2. Pull Ollama Models (one time only)
 
 ```bash
 ollama pull llama3.2:3b
 ollama pull mxbai-embed-large
 ```
 
-### 3. Set up the backend
+### 3. Set Up the Backend
 
 ```bash
 cd backend
@@ -49,11 +90,16 @@ venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 4. Create the .env file
+> **Optional — better Thai support:**
+> ```bash
+> pip install pythainlp
+> ```
 
-> ⚠️ This file is NOT in the repo for security reasons. You must create it manually.
+### 4. Create the .env File
 
-Create a new file at `backend/.env` and paste this content:
+> ⚠️ This file is NOT in the repo. You must create it manually.
+
+Create `backend/.env` with this content:
 
 ```dotenv
 DATABASE_URL=mssql+pyodbc://@(localdb)\MSSQLLocalDB/ChatBotRagPy?driver=ODBC+Driver+17+for+SQL+Server&Trusted_Connection=yes
@@ -63,15 +109,15 @@ VECTOR_WEIGHT=0.7
 MIN_SIMILARITY_THRESHOLD=0.60
 ```
 
-> ⚠️ Always use a **single backslash** `\` — never `\\`.
+> ⚠️ Always use a **single backslash** `\` in the DATABASE_URL — never `\\`
 
-### 5. Create the database
+### 5. Create the Database
 
 ```bash
 sqlcmd -S "(localdb)\MSSQLLocalDB" -E -Q "CREATE DATABASE ChatBotRagPy;"
 ```
 
-### 6. Run database migrations
+### 6. Run Database Migrations
 
 ```bash
 alembic upgrade head
@@ -81,16 +127,15 @@ You should see:
 ```
 Running upgrade  -> xxxxxxxx, InitialCreate
 ```
-No error = ✅ success
 
-### 7. Set up the frontend
+### 7. Set Up the Frontend
 
 ```bash
 cd ..\frontend
 npm install
 ```
 
-### 8. Run the project
+### 8. Run the Project
 
 Open **3 separate terminals**:
 
@@ -118,14 +163,14 @@ Open browser: **http://localhost:5173** ✅
 
 ## 🏗️ Build From Scratch
 
-> Only follow this section if you are setting up this project **for the first time** on a new machine without cloning.
+> Only follow this section if setting up on a new machine **without cloning**.
 
 ### Prerequisites
 
 - [Python 3.12+](https://www.python.org/downloads/)
 - [Node.js 24+](https://nodejs.org/)
 - [Ollama](https://ollama.com/download)
-- [SQL Server LocalDB](https://aka.ms/sqllocaldb) (comes with Visual Studio)
+- [SQL Server LocalDB](https://aka.ms/sqllocaldb)
 - [ODBC Driver 17 for SQL Server](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server)
 
 ---
@@ -136,8 +181,6 @@ Open browser: **http://localhost:5173** ✅
 ollama pull llama3.2:3b
 ollama pull mxbai-embed-large
 ```
-
-Wait for both to finish before continuing.
 
 ---
 
@@ -171,6 +214,11 @@ pip install fastapi "uvicorn[standard]" sqlalchemy alembic pyodbc python-multipa
 pip freeze > requirements.txt
 ```
 
+Optional for better Thai language support:
+```bash
+pip install pythainlp
+```
+
 #### 3.3 Create All Folders
 
 ```bash
@@ -199,7 +247,7 @@ type nul > app\evaluators\__init__.py
 
 #### 3.5 Create .env File
 
-Create `backend/.env` with this content:
+Create `backend/.env`:
 
 ```dotenv
 DATABASE_URL=mssql+pyodbc://@(localdb)\MSSQLLocalDB/ChatBotRagPy?driver=ODBC+Driver+17+for+SQL+Server&Trusted_Connection=yes
@@ -209,7 +257,7 @@ VECTOR_WEIGHT=0.7
 MIN_SIMILARITY_THRESHOLD=0.60
 ```
 
-> ⚠️ Use a **single backslash** `\` — never `\\` in the .env file.
+> ⚠️ Use a **single backslash** `\` — never `\\`
 
 #### 3.6 Create app/core/config.py
 
@@ -247,7 +295,7 @@ class DocumentStatus:
     FAILED = "Failed"
 ```
 
-> ⚠️ Do NOT write `from enum import IntEnum, str as StrEnum` — that causes an ImportError in Python 3.12.
+> ⚠️ Do NOT write `from enum import IntEnum, str as StrEnum` — causes ImportError in Python 3.12
 
 #### 3.8 Create app/database.py
 
@@ -424,20 +472,43 @@ from typing import List
 from app.chunking.base import BaseChunkingStrategy
 import re
 
+
+def _detect_language(text: str) -> str:
+    thai_count = len(re.findall(r'[\u0E00-\u0E7F]', text))
+    khmer_count = len(re.findall(r'[\u1780-\u17FF]', text))
+    if thai_count > khmer_count and thai_count > 10:
+        return 'thai'
+    if khmer_count > thai_count and khmer_count > 10:
+        return 'khmer'
+    return 'english'
+
+
+def _split_paragraphs(text: str) -> List[str]:
+    lang = _detect_language(text)
+    if lang == 'khmer':
+        parts = re.split(r'(?<=[។៕])\s*|\n\n+', text)
+    elif lang == 'thai':
+        try:
+            from pythainlp.tokenize import sent_tokenize
+            parts = sent_tokenize(text, engine='crfcut')
+        except ImportError:
+            parts = re.split(r'\n\n+|\n(?=\s)', text)
+    else:
+        parts = re.split(r'\n#{1,6} |\n\n+', text)
+    return [p.strip() for p in parts if p and p.strip()]
+
+
 class ContentAwareChunkingStrategy(BaseChunkingStrategy):
     def __init__(self, min_size: int = 100, max_size: int = 1000):
         self.min_size = min_size
         self.max_size = max_size
 
     def chunk(self, text: str) -> List[str]:
-        paragraphs = re.split(r'\n#{1,6} |\n\n|(?<=។)', text)
+        paragraphs = _split_paragraphs(text)
         chunks, current = [], ""
         for para in paragraphs:
-            para = para.strip()
-            if not para:
-                continue
             if len(current) + len(para) <= self.max_size:
-                current += " " + para
+                current += (" " if current else "") + para
             else:
                 if len(current) >= self.min_size:
                     chunks.append(current.strip())
@@ -454,29 +525,60 @@ from typing import List
 from app.chunking.base import BaseChunkingStrategy
 import re
 
+
+def _detect_language(text: str) -> str:
+    thai_count = len(re.findall(r'[\u0E00-\u0E7F]', text))
+    khmer_count = len(re.findall(r'[\u1780-\u17FF]', text))
+    if thai_count > khmer_count and thai_count > 10:
+        return 'thai'
+    if khmer_count > thai_count and khmer_count > 10:
+        return 'khmer'
+    return 'english'
+
+
+def _split_sentences(text: str) -> List[str]:
+    lang = _detect_language(text)
+    if lang == 'khmer':
+        sentences = re.split(r'(?<=[។៕៖])\s*', text)
+    elif lang == 'thai':
+        try:
+            from pythainlp.tokenize import sent_tokenize
+            sentences = sent_tokenize(text, engine='crfcut')
+        except ImportError:
+            sentences = re.split(r'\n+', text)
+    else:
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+    return [s.strip() for s in sentences if s and s.strip()]
+
+
+def _word_overlap(a: str, b: str) -> float:
+    lang = _detect_language(a + b)
+    if lang in ('thai', 'khmer'):
+        def trigrams(s):
+            return set(s[i:i+3] for i in range(len(s) - 2))
+        sa, sb = trigrams(a), trigrams(b)
+    else:
+        sa = set(a.lower().split())
+        sb = set(b.lower().split())
+    if not sa or not sb:
+        return 0.0
+    return len(sa & sb) / min(len(sa), len(sb))
+
+
 class SemanticChunkingStrategy(BaseChunkingStrategy):
     def __init__(self, min_size: int = 150, max_size: int = 1200, threshold: float = 0.3):
         self.min_size = min_size
         self.max_size = max_size
         self.threshold = threshold
 
-    def _split_sentences(self, text: str) -> List[str]:
-        return re.split(r'(?<=[.!?])\s+|(?<=។)\s*|(?<=[ๆฯ])\s+|\n', text)
-
-    def _overlap(self, a: str, b: str) -> float:
-        sa, sb = set(a.lower().split()), set(b.lower().split())
-        if not sa or not sb:
-            return 0.0
-        return len(sa & sb) / min(len(sa), len(sb))
-
     def chunk(self, text: str) -> List[str]:
-        sentences = [s.strip() for s in self._split_sentences(text) if s.strip()]
+        sentences = _split_sentences(text)
         if not sentences:
             return []
         chunks, current = [], sentences[0]
         for sent in sentences[1:]:
             if (len(current) + len(sent) <= self.max_size and
-                    self._overlap(current, sent) >= self.threshold):
+                    _word_overlap(current, sent) >= self.threshold):
                 current += " " + sent
             else:
                 if len(current) >= self.min_size:
@@ -584,6 +686,7 @@ class EmbeddingCacheService:
                         "vector": np.array(json.loads(chunk.embedding_json), dtype=np.float32)
                     }
             self._loaded = True
+        print(f"[Cache] Loaded {len(self._cache)} chunks into memory")
 
     def get_all(self) -> List[dict]:
         return list(self._cache.values())
@@ -603,7 +706,7 @@ class EmbeddingCacheService:
     def stats(self):
         total = len(self._cache)
         docs = len(set(v["document_id"] for v in self._cache.values())) if self._cache else 0
-        mem_mb = round(total * 4 * 1024 / (1024**2), 2)
+        mem_mb = round(total * 1024 * 4 / (1024**2), 2)
         return {
             "totalChunks": total,
             "totalDocuments": docs,
@@ -646,30 +749,47 @@ embedding_service = EmbeddingService()
 
 ```python
 import re
+import math
 from typing import List
+
+
+def _detect_language(text: str) -> str:
+    thai_count = len(re.findall(r'[\u0E00-\u0E7F]', text))
+    khmer_count = len(re.findall(r'[\u1780-\u17FF]', text))
+    if thai_count > khmer_count and thai_count > 10:
+        return 'thai'
+    if khmer_count > thai_count and khmer_count > 10:
+        return 'khmer'
+    return 'english'
+
 
 class BM25Service:
     def __init__(self, k1: float = 1.5, b: float = 0.75):
         self.k1 = k1
         self.b = b
 
-    def _detect_language(self, text: str) -> str:
-        if re.search(r'[\u0E00-\u0E7F]', text):
-            return 'thai'
-        if re.search(r'[\u1780-\u17FF]', text):
-            return 'khmer'
-        return 'english'
-
     def _tokenize(self, text: str) -> List[str]:
-        lang = self._detect_language(text)
-        if lang in ('thai', 'khmer'):
+        lang = _detect_language(text)
+        if lang == 'thai':
+            try:
+                from pythainlp.tokenize import word_tokenize
+                tokens = word_tokenize(text, engine='newmm', keep_whitespace=False)
+                return [t for t in tokens if t and t.strip()]
+            except ImportError:
+                n = 3
+                return [text[i:i+n] for i in range(len(text) - n + 1)]
+        elif lang == 'khmer':
             n = 3
-            return [text[i:i+n] for i in range(len(text)-n+1)]
-        stop_words = {'the','a','an','is','in','on','at','to','for','of','and','or'}
-        return [w for w in re.findall(r'\w+', text.lower()) if w not in stop_words]
+            return [text[i:i+n] for i in range(len(text) - n + 1)]
+        else:
+            stop_words = {
+                'the', 'a', 'an', 'is', 'in', 'on', 'at', 'to',
+                'for', 'of', 'and', 'or', 'it', 'its', 'be', 'was',
+                'are', 'were', 'that', 'this', 'with', 'as', 'by'
+            }
+            return [w for w in re.findall(r'\w+', text.lower()) if w not in stop_words]
 
     def score(self, query: str, documents: List[str]) -> List[float]:
-        import math
         tokenized_docs = [self._tokenize(d) for d in documents]
         avg_len = sum(len(d) for d in tokenized_docs) / len(tokenized_docs) if tokenized_docs else 1
         query_tokens = self._tokenize(query)
@@ -685,7 +805,9 @@ class BM25Service:
                 tf = tf_map.get(qt, 0)
                 df = sum(1 for d in tokenized_docs if qt in d)
                 idf = math.log((N - df + 0.5) / (df + 0.5) + 1)
-                score += idf * (tf * (self.k1 + 1)) / (tf + self.k1 * (1 - self.b + self.b * doc_len / avg_len))
+                score += idf * (tf * (self.k1 + 1)) / (
+                    tf + self.k1 * (1 - self.b + self.b * doc_len / avg_len)
+                )
             scores.append(score)
         max_score = max(scores) if scores else 1
         return [s / max_score if max_score > 0 else 0.0 for s in scores]
@@ -736,8 +858,8 @@ hybrid_search_service = HybridSearchService()
 ```python
 import json
 import uuid
-from typing import List
 from sqlalchemy.orm import Session
+from app.database import SessionLocal
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
 from app.core.enums import DocumentStatus, ChunkingStrategy
@@ -761,11 +883,12 @@ STRATEGY_NAME_MAP = {
 }
 
 class DocumentService:
-    async def process_document(self, db: Session, document_id: str, text: str, strategy: ChunkingStrategy):
-        doc = db.query(Document).filter(Document.id == document_id).first()
-        if not doc:
-            return
+    async def process_document(self, document_id: str, text: str, strategy: ChunkingStrategy):
+        db: Session = SessionLocal()
         try:
+            doc = db.query(Document).filter(Document.id == document_id).first()
+            if not doc:
+                return
             doc.status = DocumentStatus.PROCESSING
             db.commit()
             chunker = STRATEGY_MAP[strategy]()
@@ -793,9 +916,14 @@ class DocumentService:
             db.commit()
             embedding_cache.add_chunks(new_cache_chunks)
         except Exception as e:
-            doc.status = DocumentStatus.FAILED
-            db.commit()
-            print(f"[DocumentService] Error: {e}")
+            db.rollback()
+            doc = db.query(Document).filter(Document.id == document_id).first()
+            if doc:
+                doc.status = DocumentStatus.FAILED
+                db.commit()
+            print(f"[DocumentService] Error processing {document_id}: {e}")
+        finally:
+            db.close()
 
     def delete_document(self, db: Session, document_id: str):
         doc = db.query(Document).filter(Document.id == document_id).first()
@@ -808,25 +936,59 @@ class DocumentService:
 #### 3.26 Create app/services/rag_service.py
 
 ```python
-from typing import List, AsyncGenerator
+from typing import List, AsyncGenerator, Optional
 import httpx
 from app.services.embedding_service import embedding_service
 from app.services.hybrid_search import hybrid_search_service
 from app.core.config import settings
 
+RAG_SCORE_THRESHOLD = 0.65
+
 class RagService:
     def __init__(self):
         self._last_sources = []
+        self._rag_used = False
 
-    async def stream_answer(self, question: str, history: list = [], document_id: str = None) -> AsyncGenerator[str, None]:
+    async def stream_answer(self, question: str, history: Optional[List] = None, document_id: Optional[str] = None) -> AsyncGenerator[str, None]:
+        if history is None:
+            history = []
+
+        print(f"\n[RAG] ── New Question ──────────────────────────")
+        print(f"[RAG] Question   : {question}")
+        print(f"[RAG] Doc filter : {document_id or 'All documents'}")
+
         query_vector = await embedding_service.embed(question)
         chunks = await hybrid_search_service.search(query_vector, question, top_k=5, document_id=document_id)
-        self._last_sources = chunks
-        context = "\n\n".join([f"[Source {i+1}]: {c['content']}" for i, c in enumerate(chunks)])
-        messages = [{"role": "system", "content": f"You are a helpful assistant. Use the following context to answer:\n\n{context}"}]
+
+        print(f"[RAG] Chunks found (before threshold): {len(chunks)}")
+        for i, c in enumerate(chunks):
+            print(f"[RAG]   #{i+1} score={c['score']:.4f} | {c['content'][:80].strip()!r}")
+
+        high_quality_chunks = [c for c in chunks if c["score"] >= RAG_SCORE_THRESHOLD]
+        self._last_sources = high_quality_chunks
+        self._rag_used = len(high_quality_chunks) > 0
+
+        if self._rag_used:
+            print(f"[RAG] Mode       : LLM + RAG ({len(high_quality_chunks)} chunks passed threshold {RAG_SCORE_THRESHOLD})")
+            context = "\n\n".join([f"[Source {i+1}]: {c['content']}" for i, c in enumerate(high_quality_chunks)])
+            system_prompt = (
+                "You are a helpful assistant. Use the following context from the user's documents "
+                "to answer the question. If the context does not contain enough information, say so honestly.\n\n"
+                f"Context:\n{context}"
+            )
+        else:
+            print(f"[RAG] Mode       : LLM only (no chunks above threshold {RAG_SCORE_THRESHOLD})")
+            system_prompt = (
+                "You are a helpful assistant. Answer the question using your own knowledge. "
+                "No relevant document context was found for this query."
+            )
+
+        messages = [{"role": "system", "content": system_prompt}]
         for msg in history:
-            messages.append({"role": msg["role"], "content": msg["content"]})
+            if msg.get("content", "").strip():
+                messages.append({"role": msg["role"], "content": msg["content"]})
         messages.append({"role": "user", "content": question})
+
         async with httpx.AsyncClient(base_url=settings.ollama_base_url, timeout=120) as client:
             async with client.stream("POST", "/api/chat", json={
                 "model": settings.chat_model,
@@ -844,14 +1006,13 @@ class RagService:
 
     def get_last_sources(self):
         return [
-            {
-                "chunk_id": c["id"],
-                "document_id": c["document_id"],
-                "content": c["content"][:200],
-                "score": round(c["score"], 4)
-            }
+            {"chunk_id": c["id"], "document_id": c["document_id"],
+             "content": c["content"][:200], "score": round(c["score"], 4)}
             for c in self._last_sources
         ]
+
+    def get_rag_used(self) -> bool:
+        return self._rag_used
 ```
 
 #### 3.27 Create app/services/evaluation_service.py
@@ -859,6 +1020,7 @@ class RagService:
 ```python
 import httpx
 import json
+import re
 from app.services.embedding_service import embedding_service
 from app.services.hybrid_search import hybrid_search_service
 from app.evaluators.bleu import BLEUEvaluator
@@ -887,14 +1049,20 @@ class EvaluationService:
         source_docs = list(set(c["document_id"] for c in chunks))
         reference = await self._generate(f"Based on this context, write an ideal answer to: {question}\n\nContext:\n{context}")
         rag_answer = await self._generate(f"Answer this question using only the context provided.\n\nQuestion: {question}\n\nContext:\n{context}")
-        judge_prompt = f"Score this answer from 0-10.\n\nQuestion: {question}\nReference: {reference}\nAnswer: {rag_answer}\n\nRespond in JSON: {{\"score\": 8, \"explanation\": \"...\"}}"
+        judge_prompt = (
+            f"Score this answer from 0-10 for quality and accuracy.\n\n"
+            f"Question: {question}\nReference: {reference}\nAnswer: {rag_answer}\n\n"
+            f'Respond ONLY in JSON with no extra text, no markdown, no code fences: {{"score": 8, "explanation": "..."}}'
+        )
         judge_raw = await self._generate(judge_prompt)
         try:
-            judge_data = json.loads(judge_raw)
-            judge_score = judge_data.get("score", 5) / 10
+            cleaned = re.sub(r"```(?:json)?|```", "", judge_raw).strip()
+            judge_data = json.loads(cleaned)
+            judge_score = float(judge_data.get("score", 5)) / 10
             judge_explanation = judge_data.get("explanation", "")
-        except:
-            judge_score = 0.5
+        except (json.JSONDecodeError, ValueError, KeyError):
+            numbers = re.findall(r'\b([0-9]|10)\b', judge_raw)
+            judge_score = float(numbers[0]) / 10 if numbers else 0.5
             judge_explanation = judge_raw
         bleu_score = bleu.score(reference, rag_answer)
         gleu_score = gleu.score(reference, rag_answer)
@@ -944,11 +1112,7 @@ def list_documents(db: Session = Depends(get_db)):
     result = []
     for doc in docs:
         chunk_count = db.query(DocumentChunk).filter(DocumentChunk.document_id == doc.id).count()
-        result.append({
-            "id": doc.id, "file_name": doc.file_name,
-            "status": doc.status, "created_at": doc.created_at,
-            "chunk_count": chunk_count
-        })
+        result.append({"id": doc.id, "file_name": doc.file_name, "status": doc.status, "created_at": doc.created_at, "chunk_count": chunk_count})
     return result
 
 @router.get("/cache-stats")
@@ -963,12 +1127,7 @@ def get_document(document_id: str, db: Session = Depends(get_db)):
     return doc
 
 @router.post("/upload")
-async def upload_document(
-    background_tasks: BackgroundTasks,
-    file: UploadFile = File(...),
-    strategy: int = Query(default=0),
-    db: Session = Depends(get_db)
-):
+async def upload_document(background_tasks: BackgroundTasks, file: UploadFile = File(...), strategy: int = Query(default=0), db: Session = Depends(get_db)):
     content = await file.read()
     text = extract_text(file.filename, content)
     doc = Document(id=str(uuid.uuid4()), file_name=file.filename)
@@ -976,7 +1135,7 @@ async def upload_document(
     db.commit()
     db.refresh(doc)
     chunk_strategy = ChunkingStrategy(strategy)
-    background_tasks.add_task(document_service.process_document, db, doc.id, text, chunk_strategy)
+    background_tasks.add_task(document_service.process_document, doc.id, text, chunk_strategy)
     return {"id": doc.id, "file_name": doc.file_name, "message": "Upload started"}
 
 @router.delete("/{document_id}", status_code=204)
@@ -1000,15 +1159,24 @@ async def chat_ws(websocket: WebSocket):
     try:
         while True:
             data = await websocket.receive_text()
-            request = json.loads(data)
-            async for token in rag.stream_answer(
-                request["question"],
-                request.get("history", []),
-                request.get("document_id")
-            ):
-                await websocket.send_text(json.dumps({"token": token, "isFinal": False}))
-            sources = rag.get_last_sources()
-            await websocket.send_text(json.dumps({"token": "", "isFinal": True, "sources": sources}))
+            try:
+                request = json.loads(data)
+                question = request.get("question", "").strip()
+                if not question:
+                    await websocket.send_text(json.dumps({"token": "Error: question is required.", "isFinal": True, "sources": [], "ragUsed": False}))
+                    continue
+            except json.JSONDecodeError:
+                await websocket.send_text(json.dumps({"token": "Error: invalid message format.", "isFinal": True, "sources": [], "ragUsed": False}))
+                continue
+            try:
+                async for token in rag.stream_answer(question, request.get("history"), request.get("document_id")):
+                    await websocket.send_text(json.dumps({"token": token, "isFinal": False}))
+                sources = rag.get_last_sources()
+                rag_used = rag.get_rag_used()
+                await websocket.send_text(json.dumps({"token": "", "isFinal": True, "sources": sources, "ragUsed": rag_used}))
+            except Exception as e:
+                print(f"[WebSocket] Stream error: {e}")
+                await websocket.send_text(json.dumps({"token": f"Error: {str(e)}", "isFinal": True, "sources": [], "ragUsed": False}))
     except WebSocketDisconnect:
         pass
 ```
@@ -1025,11 +1193,7 @@ evaluation_service = EvaluationService()
 
 @router.post("")
 async def run_evaluation(request: EvaluationRequest):
-    return await evaluation_service.evaluate(
-        request.question,
-        request.document_id,
-        request.top_k
-    )
+    return await evaluation_service.evaluate(request.question, request.document_id, request.top_k)
 ```
 
 #### 3.31 Create app/main.py
@@ -1079,16 +1243,12 @@ def root():
 alembic init alembic
 ```
 
-Then open `alembic/env.py` and add these two lines after the existing imports at the top:
+Open `alembic/env.py` and add after existing imports:
 
 ```python
 from app.core.config import settings
 config.set_main_option("sqlalchemy.url", settings.database_url)
-```
 
-Also make sure this is in `alembic/env.py` to detect your models:
-
-```python
 from app.database import Base
 from app.models import document, document_chunk
 target_metadata = Base.metadata
@@ -1106,12 +1266,6 @@ sqlcmd -S "(localdb)\MSSQLLocalDB" -E -Q "CREATE DATABASE ChatBotRagPy;"
 alembic revision --autogenerate -m "InitialCreate"
 alembic upgrade head
 ```
-
-You should see:
-```
-Running upgrade  -> xxxxxxxx, InitialCreate
-```
-No error = ✅ success
 
 ---
 
@@ -1143,8 +1297,6 @@ mkdir src\components
 
 #### 4.4 Create Frontend Files
 
-Create these files in `frontend/src/`:
-
 | File | Purpose |
 |---|---|
 | `main.jsx` | React entry point |
@@ -1173,38 +1325,29 @@ code .
 
 ## Running the Project
 
-Open **3 separate terminals** every time you want to run the project:
+Open **3 separate terminals** every time:
 
-### Terminal 1 — Ollama
-
+**Terminal 1 — Ollama:**
 ```bash
 ollama serve
 ```
 
-### Terminal 2 — Backend
-
+**Terminal 2 — Backend:**
 ```bash
 cd D:\Jame\ChatbotRagPy\backend
 venv\Scripts\activate
 uvicorn app.main:app --reload
 ```
 
-Wait for: `Uvicorn running on http://127.0.0.1:8000`
+> ⚠️ Always activate the venv before running uvicorn. You should see `(venv)` in your terminal.
 
-### Terminal 3 — Frontend
-
+**Terminal 3 — Frontend:**
 ```bash
 cd D:\Jame\ChatbotRagPy\frontend
 npm run dev
 ```
 
-Wait for: `VITE ready — http://localhost:5173/`
-
-### Open Browser
-
-```
-http://localhost:5173
-```
+Open browser: **http://localhost:5173**
 
 ---
 
@@ -1220,17 +1363,30 @@ http://localhost:5173
 
 ---
 
+## Tuning the RAG Threshold
+
+The RAG threshold controls when document context is used vs LLM-only answers.
+Edit `RAG_SCORE_THRESHOLD` in `app/services/rag_service.py`:
+
+| Value | Effect |
+|---|---|
+| `0.70` | Stricter — only very relevant chunks trigger RAG |
+| `0.65` | Default — balanced |
+| `0.60` | Looser — more questions use RAG context |
+
+---
+
 ## Troubleshooting
 
 | Error | Cause | Fix |
 |---|---|---|
+| `ModuleNotFoundError` on uvicorn start | venv not activated | Run `venv\Scripts\activate` first |
 | `cannot import name 'str' from enum` | Wrong import in enums.py | Use only `from enum import IntEnum` |
-| `No module named app.chunking.fixed_size` | File missing | Create `fixed_size.py` in `app/chunking/` |
-| `cannot import name 'EvaluationService'` | Wrong content in file | Replace with correct EvaluationService class |
-| `cannot import name 'F1Evaluator'` | Wrong content in f1.py | Replace with correct F1Evaluator class |
-| Alembic `Server not found` | `\\` in .env | Use single `\` in .env |
+| Document stuck at Processing | Ollama not running at upload time | Ensure `ollama serve` is running before uploading |
+| Alembic `Server not found` | `\\` in .env | Use single `\` in DATABASE_URL |
 | Alembic `table already exists` | Wrong database connected | Create new DB with sqlcmd, update .env |
 | Ollama connection refused | Ollama not running | Run `ollama serve` in a separate terminal |
-| Document stuck at Processing | Ollama not running at upload time | Ensure `ollama serve` is running before uploading |
 | CORS error in browser | Frontend port wrong | Backend allows `http://localhost:5173` only |
-| WebSocket not connecting | Backend not started | Start backend first |
+| WebSocket not connecting | Backend not started | Start backend first, wait for "Uvicorn running" message |
+| Sources always showing | Old code before fix | Update `rag_service.py` and `Chat.jsx` with latest version |
+| Thai text not chunking well | pythainlp not installed | Run `pip install pythainlp` in venv |
