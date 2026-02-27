@@ -1,0 +1,323 @@
+# PROJECT CONTEXT — ChatBotRagPy
+> Paste this entire document at the start of any AI conversation to give full context.
+
+---
+
+## What Is This Project?
+
+A **Retrieval-Augmented Generation (RAG) Chatbot** built with Python (FastAPI) + React.
+The user uploads documents (PDF, TXT, MD), and can chat with them using a local Ollama LLM.
+It is a Python/React rebuild of an original .NET/Blazor project called **ChatBotRAG**.
+All features are the same — only the tech stack is different.
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | React + Vite (port 5173) |
+| Backend | FastAPI Python (port 8000) |
+| Real-time Chat | WebSocket |
+| Database | SQL Server LocalDB — database name: `ChatBotRagPy` |
+| ORM | SQLAlchemy + Alembic |
+| AI Chat Model | Ollama — llama3.2:3b |
+| AI Embed Model | Ollama — mxbai-embed-large |
+
+---
+
+## Full Project File Structure
+
+```
+D:\Jame\ChatbotRagPy\
+│
+├── README.md
+│
+├── backend/
+│   ├── .env                            ← environment variables
+│   ├── alembic.ini                     ← alembic config
+│   ├── venv/                           ← Python virtual environment
+│   │
+│   ├── alembic/
+│   │   ├── env.py                      ← reads DATABASE_URL from .env
+│   │   └── versions/                   ← migration files (auto-generated)
+│   │
+│   └── app/
+│       ├── main.py                     ← FastAPI entry point
+│       ├── database.py                 ← SQLAlchemy engine + session + get_db()
+│       │
+│       ├── core/
+│       │   ├── config.py               ← pydantic Settings (reads .env)
+│       │   └── enums.py                ← ChunkingStrategy(IntEnum), DocumentStatus
+│       │
+│       ├── models/
+│       │   ├── document.py             ← Document table (id, file_name, status, created_at)
+│       │   └── document_chunk.py       ← DocumentChunk table (id, document_id, content, chunk_index, chunking_method, embedding_json)
+│       │
+│       ├── schemas/
+│       │   ├── document.py             ← DocumentDto, UploadResponse, CacheStats
+│       │   ├── chat.py                 ← ChatRequest, ChatMessageDto, DocumentChunkResult
+│       │   └── evaluation.py           ← EvaluationRequest, EvaluationResult
+│       │
+│       ├── routers/
+│       │   ├── documents.py            ← GET/POST/DELETE /api/documents
+│       │   ├── chat.py                 ← WebSocket /api/chat/ws
+│       │   └── evaluation.py           ← POST /api/evaluation
+│       │
+│       ├── services/
+│       │   ├── embedding_cache.py      ← singleton in-memory vector cache (dict of chunk_id → {id, document_id, content, vector})
+│       │   ├── embedding_service.py    ← calls Ollama /api/embeddings
+│       │   ├── bm25_service.py         ← BM25 keyword scoring (supports EN/Thai/Khmer)
+│       │   ├── hybrid_search.py        ← cosine similarity + BM25 fusion (vector_weight=0.7)
+│       │   ├── document_service.py     ← process_document() chunks+embeds, delete_document()
+│       │   ├── rag_service.py          ← stream_answer() via WebSocket, get_last_sources()
+│       │   └── evaluation_service.py   ← evaluate() runs 3 LLM calls + 4 scores
+│       │
+│       ├── evaluators/
+│       │   ├── bleu.py                 ← BLEUEvaluator.score(reference, hypothesis)
+│       │   ├── gleu.py                 ← GLEUEvaluator.score(reference, hypothesis)
+│       │   └── f1.py                   ← F1Evaluator.score(reference, hypothesis)
+│       │
+│       └── chunking/
+│           ├── base.py                 ← BaseChunkingStrategy (abstract)
+│           ├── fixed_size.py           ← 500-char chunks, 100-char overlap
+│           ├── content_aware.py        ← splits on headings/paragraphs/Khmer ។
+│           └── semantic.py             ← groups sentences by word-overlap similarity
+│
+└── frontend/
+    ├── package.json
+    └── src/
+        ├── main.jsx                    ← React entry point
+        ├── App.jsx                     ← BrowserRouter + layout
+        ├── App.css                     ← layout (sidebar + main)
+        ├── index.css                   ← global dark theme (ChatGPT-style, green-blue accent #10a37f)
+        │
+        ├── components/
+        │   ├── Sidebar.jsx             ← left nav (Chat / Documents / Evaluation)
+        │   └── Sidebar.css
+        │
+        └── pages/
+            ├── Chat.jsx                ← WebSocket chat, document filter, streaming tokens, source display
+            ├── Chat.css
+            ├── Rag.jsx                 ← upload (drag+drop), strategy select, doc list, cache stats
+            ├── Rag.css
+            ├── Evaluation.jsx          ← question input, run eval, score bars, answer comparison
+            └── Evaluation.css
+```
+
+---
+
+## Database
+
+- **Server:** `(localdb)\MSSQLLocalDB`
+- **Database name:** `ChatBotRagPy`
+- **ORM:** SQLAlchemy with Alembic migrations
+
+### Tables
+
+**documents**
+| Column | Type | Notes |
+|---|---|---|
+| id | VARCHAR(36) | UUID primary key |
+| file_name | VARCHAR(500) | |
+| status | VARCHAR(50) | Uploading / Processing / Ready / Failed |
+| created_at | DATETIME | |
+
+**document_chunks**
+| Column | Type | Notes |
+|---|---|---|
+| id | VARCHAR(36) | UUID primary key |
+| document_id | VARCHAR(36) | FK → documents.id |
+| content | TEXT | chunk text |
+| chunk_index | INT | order of chunk |
+| chunking_method | VARCHAR(50) | FixedSize / ContentAware / Semantic |
+| embedding_json | TEXT | JSON array of floats (1024-dim vector) |
+
+---
+
+## Environment Variables (`backend/.env`)
+
+```dotenv
+DATABASE_URL=mssql+pyodbc://@(localdb)\MSSQLLocalDB/ChatBotRagPy?driver=ODBC+Driver+17+for+SQL+Server&Trusted_Connection=yes
+CHAT_MODEL=llama3.2:3b
+EMBED_MODEL=mxbai-embed-large:latest
+VECTOR_WEIGHT=0.7
+MIN_SIMILARITY_THRESHOLD=0.60
+```
+
+> ⚠️ Always single backslash `\` in .env — never `\\`
+
+---
+
+## API Endpoints
+
+### Documents
+| Method | URL | Description |
+|---|---|---|
+| GET | `/api/documents` | List all documents with chunk count |
+| GET | `/api/documents/cache-stats` | RAM cache: totalChunks, totalDocuments, isLoaded, estimatedMemoryMb |
+| GET | `/api/documents/{id}` | Get one document |
+| POST | `/api/documents/upload?strategy=0` | Upload file (multipart), process in background |
+| DELETE | `/api/documents/{id}` | Delete document + chunks + remove from cache |
+
+### Chat
+| Method | URL | Description |
+|---|---|---|
+| WebSocket | `/api/chat/ws` | Stream chat tokens |
+
+WebSocket send:
+```json
+{ "question": "string", "history": [], "document_id": "optional-uuid" }
+```
+WebSocket receive (streaming):
+```json
+{ "token": "Hello", "isFinal": false }
+{ "token": "", "isFinal": true, "sources": [{ "chunk_id": "...", "document_id": "...", "content": "...", "score": 0.85 }] }
+```
+
+### Evaluation
+| Method | URL | Description |
+|---|---|---|
+| POST | `/api/evaluation` | Run full evaluation pipeline |
+
+Request:
+```json
+{ "question": "string", "document_id": null, "top_k": 5 }
+```
+Response:
+```json
+{
+  "question": "...",
+  "auto_generated_reference": "...",
+  "generated_answer": "...",
+  "source_documents": ["uuid1"],
+  "bleu_score": 0.72,
+  "gleu_score": 0.68,
+  "f1_score": 0.81,
+  "llm_judge_score": 0.90,
+  "llm_judge_explanation": "...",
+  "overall_score": 0.78
+}
+```
+
+---
+
+## How RAG Works (Step by Step)
+
+```
+1. UPLOAD
+   User uploads PDF/TXT/MD → router calls document_service.process_document() in background
+   → chunking strategy splits text into chunks
+   → each chunk embedded via Ollama mxbai-embed-large (1024-dim float vector)
+   → chunks + vectors saved to SQL Server as JSON strings
+   → document status set to Ready
+   → new chunks added to in-memory embedding_cache
+
+2. CACHE
+   On app startup → embedding_cache.warm_up() loads ALL Ready chunks from DB into RAM
+   Structure: Dict[chunk_id] = { id, document_id, content, vector: np.float32 array }
+
+3. QUERY (Chat)
+   User sends question via WebSocket
+   → question embedded via Ollama
+   → hybrid_search_service.search() runs:
+       cosine_similarity(query_vector, each cached chunk vector) × 0.7
+       + bm25_service.score(query_text, chunk_contents) × 0.3
+   → chunks above MIN_SIMILARITY_THRESHOLD=0.60 sorted by score
+   → top 5 chunks used as context
+   → llama3.2:3b called with context + history → streams tokens back via WebSocket
+
+4. EVALUATION
+   → Same hybrid search to get chunks
+   → LLM call 1: generate ideal reference answer from chunks
+   → LLM call 2: generate actual RAG answer
+   → LLM call 3: LLM Judge scores answer quality 0-10
+   → BLEU, GLEU, F1 computed by comparing RAG answer vs reference
+   → overall = average of all 4 scores
+```
+
+---
+
+## Frontend Pages
+
+### `/chat` — Chat Page
+- Left sidebar navigation
+- Dropdown to filter by document or search all
+- Textarea input (Enter to send, Shift+Enter for newline)
+- Streams tokens via WebSocket as they arrive
+- Shows sources used after response completes
+- Hint chips for empty state
+
+### `/rag` — Documents Page
+- Stats bar: ready count, processing count, chunks in RAM
+- Chunking strategy selector (3 cards: FixedSize / ContentAware / Semantic)
+- Drag-and-drop upload zone (PDF, TXT, MD)
+- Document list with status badges, chunk count, date
+- Delete button per document
+- Cache stats panel (chunks, documents, MB used)
+- Auto-polls every 3 seconds to refresh status
+
+### `/evaluation` — Evaluation Page
+- Question textarea
+- Document selector (only Ready documents)
+- Top K input
+- Progress steps shown during evaluation (5 steps)
+- Overall score (large %) with color-coded interpretation
+- 4 score bars: BLEU, GLEU, F1, LLM Judge
+- LLM Judge explanation text
+- Side-by-side reference vs RAG answer
+- Source document chips
+
+---
+
+## UI Theme
+
+- **Style:** Dark theme, ChatGPT-inspired
+- **Accent color:** `#10a37f` (green-teal) + `#1a7fa8` (blue)
+- **Font:** Sora (UI) + JetBrains Mono (code/numbers)
+- **Background:** `#0d0d0d` primary, `#161616` secondary, `#1e1e1e` tertiary
+
+---
+
+## Known Issues Fixed During Development
+
+| Issue | Root Cause | Fix |
+|---|---|---|
+| `cannot import name 'str' from enum` | Wrong import in enums.py | Remove `str as StrEnum`, keep only `IntEnum` |
+| `No module named app.chunking.fixed_size` | File was missing | Created `fixed_size.py` manually |
+| `cannot import name 'EvaluationService'` | evaluation_service.py had rag_service code | Replaced with correct EvaluationService class |
+| `cannot import name 'F1Evaluator'` | f1.py had gleu.py content pasted by mistake | Replaced with correct F1Evaluator class |
+| Alembic `Server not found` | `\\` in .env instead of `\` | Use single backslash in .env |
+| Alembic `table already exists` | Connecting to old ChatBotRag DB | Created new ChatBotRagPy DB with sqlcmd |
+
+---
+
+## How to Run (Quick Reference)
+
+```bash
+# Terminal 1
+ollama serve
+
+# Terminal 2
+cd D:\Jame\ChatbotRagPy\backend
+venv\Scripts\activate
+uvicorn app.main:app --reload
+
+# Terminal 3
+cd D:\Jame\ChatbotRagPy\frontend
+npm run dev
+```
+
+Open: http://localhost:5173
+
+---
+
+## Current Status
+
+- ✅ Backend running on port 8000
+- ✅ Frontend running on port 5173
+- ✅ Database migrations applied
+- ✅ All 3 pages built (Chat, Documents, Evaluation)
+- ✅ WebSocket streaming works
+- ✅ Hybrid search (Vector + BM25) works
+- ✅ Evaluation pipeline (BLEU/GLEU/F1/LLM Judge) works
