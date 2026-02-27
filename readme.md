@@ -21,9 +21,95 @@ Upload documents and chat with them in real time using local Ollama models.
 
 ---
 
-## Prerequisites
+## ⚡ Already Cloned? Start Here
 
-Install all of these before starting:
+If you just cloned this repo, follow these steps to get it running:
+
+### 1. Install prerequisites (one time only)
+
+- [Python 3.12+](https://www.python.org/downloads/)
+- [Node.js 24+](https://nodejs.org/)
+- [Ollama](https://ollama.com/download)
+- [SQL Server LocalDB](https://aka.ms/sqllocaldb)
+- [ODBC Driver 17 for SQL Server](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server)
+
+### 2. Pull Ollama models (one time only)
+
+```bash
+ollama pull llama3.2:3b
+ollama pull mxbai-embed-large
+```
+
+### 3. Set up the backend
+
+```bash
+cd backend
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+### 4. Create the .env file
+
+Create a file at `backend/.env` with this content:
+
+```dotenv
+DATABASE_URL=mssql+pyodbc://@(localdb)\MSSQLLocalDB/ChatBotRagPy?driver=ODBC+Driver+17+for+SQL+Server&Trusted_Connection=yes
+CHAT_MODEL=llama3.2:3b
+EMBED_MODEL=mxbai-embed-large:latest
+VECTOR_WEIGHT=0.7
+MIN_SIMILARITY_THRESHOLD=0.60
+```
+
+> ⚠️ The `.env` file is not included in the repo (for security). You must create it manually.
+> Always use a **single backslash** `\` — never `\\`.
+
+### 5. Create the database
+
+```bash
+sqlcmd -S "(localdb)\MSSQLLocalDB" -E -Q "CREATE DATABASE ChatBotRagPy;"
+```
+
+### 6. Run database migrations
+
+```bash
+alembic upgrade head
+```
+
+### 7. Set up the frontend
+
+```bash
+cd ..\frontend
+npm install
+```
+
+### 8. Run the project
+
+Open **3 separate terminals**:
+
+**Terminal 1:**
+```bash
+ollama serve
+```
+
+**Terminal 2:**
+```bash
+cd backend
+venv\Scripts\activate
+uvicorn app.main:app --reload
+```
+
+**Terminal 3:**
+```bash
+cd frontend
+npm run dev
+```
+
+Open browser: **http://localhost:5173**
+
+---
+
+## Prerequisites
 
 - [Python 3.12+](https://www.python.org/downloads/)
 - [Node.js 24+](https://nodejs.org/)
@@ -71,6 +157,12 @@ You should see `(venv)` at the start of your terminal line.
 
 ```bash
 pip install fastapi "uvicorn[standard]" sqlalchemy alembic pyodbc python-multipart aiofiles ollama httpx numpy rank-bm25 pypdf2 markdownify python-dotenv "pydantic-settings"
+```
+
+Then save them to `requirements.txt` so others can restore them:
+
+```bash
+pip freeze > requirements.txt
 ```
 
 ### 3.3 Create All Folders
