@@ -151,6 +151,9 @@ venv\Scripts\activate
 uvicorn app.main:app --reload
 ```
 
+Open browser: **http://127.0.0.1:8000/docs**
+
+
 **Terminal 3 — Frontend:**
 ```bash
 cd frontend
